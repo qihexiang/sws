@@ -2,7 +2,7 @@ mod element;
 mod bond;
 mod chirality;
 mod smiles_node;
-mod molecule;
+pub mod molecule;
 
 #[test]
 fn generate_node() {

@@ -11,7 +11,7 @@ pub enum BondType {
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-enum SingleBondType {
+pub enum SingleBondType {
     Normal,
     LeftUp,
     RightUp,
