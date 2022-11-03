@@ -21,7 +21,7 @@ impl BondType {
     pub fn simple() -> Self {
         Self::Single(SingleBondType::Normal)
     }
-    
+
     pub fn from_str(s: &str) -> Option<Self> {
         if BOND_RE.is_match(s) {
             Some(match s {
@@ -36,6 +36,14 @@ impl BondType {
             })
         } else {
             None
+        }
+    }
+
+    pub fn is_no_bond(&self) -> bool {
+        if let Self::NoBond = self {
+            true
+        } else {
+            false
         }
     }
 }

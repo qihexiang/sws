@@ -1,4 +1,4 @@
-use petgraph::{graph::NodeIndex, Graph, Undirected};
+use petgraph::{graph::{NodeIndex}, Graph, Undirected};
 
 use crate::tokenizer::{smiles_tokenize, NOTHING_RE, BRANCH_RE, RING_BOND_RE};
 
@@ -89,6 +89,12 @@ impl Molecule {
                 }
             }
         }
+
+        graph.retain_edges(|graph, edge| {
+            let bond_type = graph.edge_weight(edge).unwrap();
+            !bond_type.is_no_bond()
+        });
+
         if construct_status.branch.len() != 0 {
             Err(format!(
                 "Uncleaned brnach stack. Some opened stack not cloused: {:?}",
