@@ -1,15 +1,18 @@
-use petgraph::{graph::{NodeIndex}, Graph, Undirected};
+use petgraph::{
+    graph::{NodeIndex},
+    Graph, Directed, dot::Dot,
+};
 
-use crate::tokenizer::{smiles_tokenize, NOTHING_RE, BRANCH_RE, RING_BOND_RE};
+use crate::tokenizer::{smiles_tokenize, BRANCH_RE, NOTHING_RE, RING_BOND_RE};
 
 use super::{bond::BondType, smiles_node::SmilesNode};
 
 #[derive(Debug)]
-pub struct Molecule(Graph<SmilesNode, BondType, Undirected>);
+pub struct Molecule(Graph<SmilesNode, BondType, Directed>);
 
 impl Molecule {
     pub fn from_smiles(smiles: &str) -> Result<Self, String> {
-        let mut graph = Graph::new_undirected();
+        let mut graph = Graph::new();
         let mut construct_status = Status::new();
         let mut ring_status = RingStatus::new();
         let mut bond_to_connect: Option<BondType> = None;
@@ -112,6 +115,83 @@ impl Molecule {
         } else {
             Ok(Molecule(graph))
         }
+    }
+
+    pub fn filter_nodes<F>(&self, find_fn: F) -> Vec<NodeIndex>
+    where
+        F: Fn(&SmilesNode) -> bool,
+    {
+        self.0
+            .node_indices()
+            .filter(|index| find_fn(&self.0[*index]))
+            .collect()
+    }
+
+    pub fn find_node<F>(&self, find_fn: F) -> Option<NodeIndex>
+    where
+        F: Fn(&SmilesNode) -> bool,
+    {
+        self.0
+            .node_indices()
+            .filter(|index| find_fn(&self.0[*index]))
+            .collect::<Vec<NodeIndex>>()
+            .get(0)
+            .and_then(|index| Some(*index))
+    }
+
+    pub fn get_atom(&self, index: NodeIndex) -> Option<&SmilesNode> {
+        self.0.node_weight(index)
+    }
+
+    pub fn get_atom_mut(&mut self, index: NodeIndex) -> Option<&mut SmilesNode> {
+        self.0.node_weight_mut(index)
+    }
+
+    pub fn connect_new_atom(
+        &mut self,
+        atom: SmilesNode,
+        connect_to: NodeIndex,
+        bond_type: BondType,
+    ) {
+        let new_node = self.0.add_node(atom);
+        self.0.add_edge(connect_to, new_node, bond_type);
+    }
+
+    pub fn add_hydrogens(&mut self) {
+        self.filter_nodes(|_| true).iter().for_each(|index| {
+            let node = self.get_atom(*index).unwrap();
+            let hydrogens_to_add = if node.explicit_hydrogen != 0 {
+                node.explicit_hydrogen
+            } else if node.element.default_hydrogen() == 0 {
+                0
+            } else {
+                let default_hydrogens = node.element.default_hydrogen();
+                let charge = node.charge;
+                let edges = self.0.edges(*index).collect::<Vec<_>>().len() as isize;
+                let need_to_add = (default_hydrogens as isize) + charge - edges;
+                if need_to_add >= 0 {
+                    need_to_add as usize
+                } else {
+                    0
+                }
+            };
+            let mut counter = 0usize;
+            loop {
+                if counter == hydrogens_to_add {
+                    break;
+                }
+                counter += 1;
+                self.connect_new_atom(
+                    SmilesNode::new("[H]", None).unwrap(),
+                    *index,
+                    BondType::simple(),
+                )
+            }
+        });
+    }
+
+    pub fn dot_representation(&self) -> Dot<&Graph<SmilesNode, BondType, Directed>> {
+        Dot::new(&self.0)
     }
 }
 

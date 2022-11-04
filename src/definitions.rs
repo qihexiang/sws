@@ -2,6 +2,7 @@ mod element;
 mod bond;
 mod chirality;
 mod smiles_node;
+mod selectors;
 pub mod molecule;
 
 #[test]
@@ -16,7 +17,7 @@ fn generate_node() {
         "c1c([OH2+])cccc1[P{selected}]6(c2ccccc2)Cc3c(cccc3)C[PH2{selected}](c4ccccc4)(c5ccccc5)[Fe+2]6",
         "C=1CCC1",
         "C1%12C3C4C1C5C%12C3C45",
-        "[I-].[Na+].C=CCBr>>[Na+].[Br-].C=CCI",
+        "[I-].[Na+].C=CCBr",
         "[Fe++]",
         "N[C@@](F)(C)C(=O)O",
         "O1CCCC[C@@H]1C",

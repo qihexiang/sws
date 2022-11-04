@@ -1,6 +1,6 @@
 use strum_macros::EnumString;
 
-#[derive(EnumString, Debug)]
+#[derive(EnumString, Debug, PartialEq)]
 pub enum Element {
     H = 1,
     He,
@@ -88,4 +88,17 @@ pub enum Element {
     Po,
     At,
     Rn,
+}
+
+impl Element {
+    pub fn default_hydrogen(&self) -> usize {
+        match self {
+            // Self::H | Self::Li | Self::Na | Self::K | Self::Rb | Self::Cs 
+            Self::F | Self::Cl | Self::Br | Self::I => 1,
+            Self::O | Self::S => 2,
+            Self::B | Self::N | Self::P => 3,
+            Self::C | Self::Si => 4,
+            _ => 0
+        }
+    }
 }

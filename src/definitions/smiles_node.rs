@@ -6,14 +6,14 @@ use petgraph::graph::NodeIndex;
 
 #[derive(Debug)]
 pub struct SmilesNode {
-    element: Element,
-    isotope: Option<u16>,
-    charge: i8,
-    chirality: (Option<ChiralityType>, Option<NodeIndex>),
-    explicit_hydrogen: u8,
-    selector: Option<String>,
+    pub element: Element,
+    pub isotope: Option<u16>,
+    pub charge: isize,
+    pub chirality: (Option<ChiralityType>, Option<NodeIndex>),
+    pub explicit_hydrogen: usize,
+    pub selector: Option<String>,
     pub aromatic: bool,
-    react_id: Option<u8>,
+    pub react_id: Option<usize>,
 }
 
 impl SmilesNode {
@@ -39,23 +39,23 @@ impl SmilesNode {
                         Ok(isotope) => Some(isotope),
                         Err(_) => None,
                     });
-            let explicit_hydrogen: u8 = captured
+            let explicit_hydrogen = captured
                 .name("explicit_hydrogen")
                 .and_then(|m| match m.as_str().parse() {
                     Ok(isotope) => Some(isotope),
                     Err(_) => None,
                 })
                 .map_or(0, |v| v);
-            let charge: i8 = {
+            let charge = {
                 if let Some(charge) = captured
                     .name("charge_num")
-                    .and_then(|m| Some(m.as_str().parse().unwrap()))
+                    .and_then(|m| Some(m.as_str().parse::<isize>().unwrap()))
                 {
                     charge
                 } else if let Some(charge_str) =
                     captured.name("charge").and_then(|m| Some(m.as_str()))
                 {
-                    charge_str.len() as i8 * {
+                    charge_str.len() as isize * {
                         if NAGETIVE_RE.is_match(charge_str) {
                             -1
                         } else {
@@ -69,7 +69,7 @@ impl SmilesNode {
             let react_id = captured
                 .name("react_id")
                 .and_then(|m| Some(m.as_str()))
-                .and_then(|s| Some(s.parse::<u8>().unwrap()));
+                .and_then(|s| Some(s.parse::<usize>().unwrap()));
             let selector = captured
                 .name("selector")
                 .and_then(|m| {
