@@ -2,7 +2,7 @@ mod element;
 mod bond;
 mod chirality;
 mod smiles_node;
-mod selectors;
+pub mod selectors;
 pub mod molecule;
 
 #[test]

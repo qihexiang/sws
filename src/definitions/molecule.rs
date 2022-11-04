@@ -1,18 +1,19 @@
-use petgraph::{
-    graph::{NodeIndex},
-    Graph, Directed, dot::Dot,
-};
+use petgraph::{dot::Dot, graph::NodeIndex, Directed, stable_graph::StableGraph};
 
 use crate::tokenizer::{smiles_tokenize, BRANCH_RE, NOTHING_RE, RING_BOND_RE};
 
-use super::{bond::BondType, smiles_node::SmilesNode};
+use super::{
+    bond::{Bond, BondType},
+    element::Element,
+    smiles_node::SmilesNode,
+};
 
 #[derive(Debug)]
-pub struct Molecule(Graph<SmilesNode, BondType, Directed>);
+pub struct Molecule(StableGraph<SmilesNode, Bond, Directed>);
 
 impl Molecule {
     pub fn from_smiles(smiles: &str) -> Result<Self, String> {
-        let mut graph = Graph::new();
+        let mut graph: StableGraph<SmilesNode, Bond> = StableGraph::new();
         let mut construct_status = Status::new();
         let mut ring_status = RingStatus::new();
         let mut bond_to_connect: Option<BondType> = None;
@@ -34,9 +35,9 @@ impl Molecule {
                     graph.add_edge(
                         current_index,
                         node_index,
-                        if let Some(bond) = bond_to_connect {
+                        if let Some(bond_type) = bond_to_connect {
                             bond_to_connect = None;
-                            bond
+                            Bond::new(bond_type, false)
                         } else {
                             let current_node = graph
                                 .node_weight(current_index)
@@ -45,14 +46,14 @@ impl Molecule {
                                 .node_weight(node_index)
                                 .expect("Next node is inserted into graph just now.");
                             if current_node.aromatic && next_node.aromatic {
-                                BondType::Aromatic
+                                Bond::new(BondType::Aromatic, false)
                             } else {
-                                BondType::simple()
+                                Bond::new(BondType::Single, false)
                             }
                         },
                     );
                     construct_status.next(node_index);
-                } else if let Some(bond) = BondType::from_str(token) {
+                } else if let Some(bond) = BondType::new(token) {
                     bond_to_connect = Some(bond)
                 } else if NOTHING_RE.is_match(token) {
                     bond_to_connect = Some(BondType::NoBond)
@@ -70,9 +71,9 @@ impl Molecule {
                                     .node_weight(another_index)
                                     .expect("Next node is inserted into graph just now.");
                                 if current_node.aromatic && next_node.aromatic {
-                                    BondType::Aromatic
+                                    Bond::new(BondType::Aromatic, false)
                                 } else {
-                                    BondType::simple()
+                                    Bond::new(BondType::Single, false)
                                 }
                             });
                         }
@@ -147,12 +148,7 @@ impl Molecule {
         self.0.node_weight_mut(index)
     }
 
-    pub fn connect_new_atom(
-        &mut self,
-        atom: SmilesNode,
-        connect_to: NodeIndex,
-        bond_type: BondType,
-    ) {
+    pub fn connect_new_atom(&mut self, atom: SmilesNode, connect_to: NodeIndex, bond_type: Bond) {
         let new_node = self.0.add_node(atom);
         self.0.add_edge(connect_to, new_node, bond_type);
     }
@@ -166,9 +162,14 @@ impl Molecule {
                 0
             } else {
                 let default_hydrogens = node.element.default_hydrogen();
+                let aromatic = if node.aromatic { 1 } else { 0 };
                 let charge = node.charge;
-                let edges = self.0.edges(*index).collect::<Vec<_>>().len() as isize;
-                let need_to_add = (default_hydrogens as isize) + charge - edges;
+                let neighbors = self
+                    .0
+                    .neighbors_undirected(*index)
+                    .collect::<Vec<_>>()
+                    .len() as isize;
+                let need_to_add = (default_hydrogens as isize) + charge - neighbors - aromatic;
                 if need_to_add >= 0 {
                     need_to_add as usize
                 } else {
@@ -184,13 +185,24 @@ impl Molecule {
                 self.connect_new_atom(
                     SmilesNode::new("[H]", None).unwrap(),
                     *index,
-                    BondType::simple(),
+                    Bond::new(BondType::Single, false),
                 )
             }
         });
     }
 
-    pub fn dot_representation(&self) -> Dot<&Graph<SmilesNode, BondType, Directed>> {
+    pub fn remove_hydrogens(&mut self) {
+        let hydrogens = self.filter_nodes(|node| node.element == Element::H);
+        println!("{:?}", hydrogens);
+        for atom in hydrogens {
+            match self.0.remove_node(atom) {
+                Some(node) => {println!("{} removed", node)}
+                None => {println!("Failed to remove {:?}", atom)}
+            }
+        }
+    }
+
+    pub fn dot_representation(&self) -> Dot<&StableGraph<SmilesNode, Bond, Directed>> {
         Dot::new(&self.0)
     }
 }
@@ -245,11 +257,11 @@ impl Status {
 }
 
 struct RingStatus {
-    waiting_to_connect: Vec<(NodeIndex, Option<BondType>, u8)>,
+    waiting_to_connect: Vec<(NodeIndex, Option<Bond>, u8)>,
 }
 
 impl RingStatus {
-    fn identify_ring(token: &str) -> Option<(Option<BondType>, u8)> {
+    fn identify_ring(token: &str) -> Option<(Option<Bond>, u8)> {
         if let Some(captured) = RING_BOND_RE.captures(token) {
             let id = captured
                 .name("ring_id")
@@ -264,7 +276,8 @@ impl RingStatus {
             let bond_type = captured
                 .name("bond_type")
                 .and_then(|m| Some(m.as_str()))
-                .and_then(BondType::from_str);
+                .and_then(|s| BondType::new(s))
+                .and_then(|bond_type| Some(Bond::new(bond_type, true)));
             Some((bond_type, id))
         } else {
             None
@@ -280,9 +293,9 @@ impl RingStatus {
     fn ring(
         &mut self,
         node_index: NodeIndex,
-        bond_type: Option<BondType>,
+        bond_type: Option<Bond>,
         id: u8,
-    ) -> Option<(NodeIndex, Option<BondType>)> {
+    ) -> Option<(NodeIndex, Option<Bond>)> {
         if let Some(target) = self.waiting_to_connect.iter().position(|item| item.2 == id) {
             let target_ring = self
                 .waiting_to_connect

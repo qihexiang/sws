@@ -1,8 +1,14 @@
+use std::fmt::Display;
+
+use petgraph::graph::NodeIndex;
+
 use crate::tokenizer::BOND_RE;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum BondType {
-    Single(SingleBondType),
+    Single,
+    UpSingle,
+    DownSingle,
     Double,
     Triple,
     Quad,
@@ -10,40 +16,67 @@ pub enum BondType {
     NoBond,
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum SingleBondType {
-    Normal,
-    LeftUp,
-    RightUp,
-}
-
 impl BondType {
-    pub fn simple() -> Self {
-        Self::Single(SingleBondType::Normal)
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        if BOND_RE.is_match(s) {
-            Some(match s {
-                "-" => Self::Single(SingleBondType::Normal),
-                "/" => Self::Single(SingleBondType::RightUp),
-                "\\" => Self::Single(SingleBondType::LeftUp),
-                "=" => Self::Double,
-                "#" => Self::Triple,
-                "$" => Self::Quad,
-                ":" => Self::Aromatic,
+    pub fn new(bond_str: &str) -> Option<Self>{
+        if BOND_RE.is_match(bond_str) {
+            Some(match bond_str {
+                "-" => BondType::Single,
+                "/" => BondType::UpSingle,
+                "\\" => BondType::DownSingle,
+                "=" => BondType::Double,
+                "#" => BondType::Triple,
+                "$" => BondType::Quad,
+                ":" => BondType::Aromatic,
                 _ => panic!("This shall never happend"),
             })
         } else {
             None
         }
     }
+}
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub struct Bond {
+    bond_type: BondType,
+    ring: bool
+}
+
+impl Bond {
+    pub fn new(bond_type: BondType, ring: bool) -> Self {
+        Bond {
+            bond_type, ring
+        }
+    }
 
     pub fn is_no_bond(&self) -> bool {
-        if let Self::NoBond = self {
+        if let BondType::NoBond = self.bond_type {
             true
         } else {
             false
         }
+    }
+}
+
+impl Display for Bond {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            match self.bond_type {
+                BondType::Double => "=",
+                BondType::Triple => "#",
+                BondType::Quad => "$",
+                BondType::Aromatic => ":",
+                BondType::Single => "-",
+                BondType::UpSingle => "\\",
+                BondType::DownSingle => "/",
+                BondType::NoBond => "."
+            },
+            if self.ring {
+                " ring key"
+            } else {
+                ""
+            }
+        )
     }
 }

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, fmt::Display};
 
 use super::{chirality::ChiralityType, element::Element};
 use crate::tokenizer::{AROMATIC_ORGANIC_RE, NAGETIVE_RE, ORGANIC_SUBSET_RE, STANDARD_NODE_RE};
@@ -110,5 +110,11 @@ impl SmilesNode {
         capitalized.push_str(&element[1..]);
         let element = Element::from_str(&capitalized).expect("Invalid given element.");
         Some((element, aromatic, chirality_type))
+    }
+}
+
+impl Display for SmilesNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.element.as_ref())
     }
 }
