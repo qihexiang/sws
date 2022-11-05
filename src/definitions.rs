@@ -7,7 +7,7 @@ pub mod molecule;
 
 #[test]
 fn generate_node() {
-    use molecule::Molecule;
+    use molecule::Molecules;
     let smiles_strs = vec![
         "c1cc[13c]cc1",
         "c1ccccc1C@@(N)(P)S",
@@ -24,11 +24,13 @@ fn generate_node() {
         "[CH2:1]=[CH:2][CH2:1][CH2:3][C:4](C)[CH2:3]"
     ];
 
-    for smiles in smiles_strs {
+    let mut mole = Molecules::new();
+    for smiles in smiles_strs.iter() {
+        mole.add_smiles(smiles).unwrap();
         println!("{}", smiles);
-        let mole = Molecule::from_smiles(smiles);
-        if let Ok(mole) = mole {
-            println!("{:?}", mole);
-        }
     }
+
+    println!("{}", mole.dot_representation());
+    
+    assert_eq!(smiles_strs.len(), mole.find_strcutres_roots().len())
 }

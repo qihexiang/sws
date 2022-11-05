@@ -1,4 +1,4 @@
-use petgraph::{dot::Dot, graph::NodeIndex, Directed, stable_graph::StableGraph};
+use petgraph::{dot::Dot, graph::NodeIndex, stable_graph::StableGraph, Directed, Direction::Incoming, visit::IntoEdges};
 
 use crate::tokenizer::{smiles_tokenize, BRANCH_RE, NOTHING_RE, RING_BOND_RE};
 
@@ -9,95 +9,98 @@ use super::{
 };
 
 #[derive(Debug)]
-pub struct Molecule(StableGraph<SmilesNode, Bond, Directed>);
+pub struct Molecules {
+    graph: StableGraph<SmilesNode, Bond, Directed>,
+}
 
-impl Molecule {
-    pub fn from_smiles(smiles: &str) -> Result<Self, String> {
-        let mut graph: StableGraph<SmilesNode, Bond> = StableGraph::new();
+impl Molecules {
+    pub fn new() -> Self {
+        Self {
+            graph: StableGraph::new(),
+        }
+    }
+
+    pub fn add_smiles(&mut self, smiles: &str) -> Result<NodeIndex, String> {
         let mut construct_status = Status::new();
         let mut ring_status = RingStatus::new();
         let mut bond_to_connect: Option<BondType> = None;
         let tokens = smiles_tokenize(smiles);
-        for token in tokens.into_iter() {
-            if construct_status.is_none() {
-                if let Some(node) = SmilesNode::new(token, None) {
-                    construct_status.next(graph.add_node(node))
-                } else {
-                    return Err(format!(
-                        "First token must be a SMILES atom token, but got {}",
-                        token
-                    ));
-                }
-            } else {
-                let current_index = construct_status.get_index().map_err(String::from)?;
-                if let Some(node) = SmilesNode::new(token, Some(current_index)) {
-                    let node_index = graph.add_node(node);
-                    graph.add_edge(
-                        current_index,
-                        node_index,
-                        if let Some(bond_type) = bond_to_connect {
-                            bond_to_connect = None;
-                            Bond::new(bond_type, false)
+        let result = if let Some(node) = SmilesNode::new(tokens[0], None) {
+            Ok(construct_status.next(self.graph.add_node(node)))
+        } else {
+            Err(format!(
+                "First token must be a SMILES atom token, but got {}",
+                tokens[0]
+            ))
+        };
+        for token in tokens[1..].into_iter() {
+            let current_index = construct_status.get_index().map_err(String::from)?;
+            if let Some(node) = SmilesNode::new(token, Some(current_index)) {
+                let node_index = self.graph.add_node(node);
+                self.graph.add_edge(
+                    current_index,
+                    node_index,
+                    if let Some(bond_type) = bond_to_connect {
+                        bond_to_connect = None;
+                        Bond::new(bond_type, false)
+                    } else {
+                        let current_node = self
+                            .graph
+                            .node_weight(current_index)
+                            .expect("Current node shall be inserted into graph before now.");
+                        let next_node = self
+                            .graph
+                            .node_weight(node_index)
+                            .expect("Next node is inserted into graph just now.");
+                        if current_node.aromatic && next_node.aromatic {
+                            Bond::new(BondType::Aromatic, false)
                         } else {
-                            let current_node = graph
+                            Bond::new(BondType::Single, false)
+                        }
+                    },
+                );
+                construct_status.next(node_index);
+            } else if let Some(bond) = BondType::new(token) {
+                bond_to_connect = Some(bond)
+            } else if NOTHING_RE.is_match(token) {
+                bond_to_connect = Some(BondType::NoBond)
+            } else if let Some((bond_type, id)) = RingStatus::identify_ring(token) {
+                let ring = ring_status.ring(current_index, bond_type, id);
+                if let Some((another_index, bond)) = ring {
+                    if let Some(bond) = bond {
+                        self.graph.add_edge(current_index, another_index, bond);
+                    } else {
+                        self.graph.add_edge(current_index, another_index, {
+                            let current_node = self
+                                .graph
                                 .node_weight(current_index)
                                 .expect("Current node shall be inserted into graph before now.");
-                            let next_node = graph
-                                .node_weight(node_index)
+                            let next_node = self
+                                .graph
+                                .node_weight(another_index)
                                 .expect("Next node is inserted into graph just now.");
                             if current_node.aromatic && next_node.aromatic {
-                                Bond::new(BondType::Aromatic, false)
+                                Bond::new(BondType::Aromatic, true)
                             } else {
-                                Bond::new(BondType::Single, false)
+                                Bond::new(BondType::Single, true)
                             }
-                        },
-                    );
-                    construct_status.next(node_index);
-                } else if let Some(bond) = BondType::new(token) {
-                    bond_to_connect = Some(bond)
-                } else if NOTHING_RE.is_match(token) {
-                    bond_to_connect = Some(BondType::NoBond)
-                } else if let Some((bond_type, id)) = RingStatus::identify_ring(token) {
-                    let ring = ring_status.ring(current_index, bond_type, id);
-                    if let Some((another_index, bond_type)) = ring {
-                        if let Some(bond_type) = bond_type {
-                            graph.add_edge(current_index, another_index, bond_type);
-                        } else {
-                            graph.add_edge(current_index, another_index, {
-                                let current_node = graph.node_weight(current_index).expect(
-                                    "Current node shall be inserted into graph before now.",
-                                );
-                                let next_node = graph
-                                    .node_weight(another_index)
-                                    .expect("Next node is inserted into graph just now.");
-                                if current_node.aromatic && next_node.aromatic {
-                                    Bond::new(BondType::Aromatic, false)
-                                } else {
-                                    Bond::new(BondType::Single, false)
-                                }
-                            });
-                        }
+                        });
                     }
-                } else if BRANCH_RE.is_match(token) {
-                    match token {
-                        "(" => {
-                            construct_status.enter_branch();
-                        }
-                        ")" => {
-                            construct_status.quit_branch();
-                        }
-                        _ => {
-                            panic!("Unknown operator catched {}", token)
-                        }
+                }
+            } else if BRANCH_RE.is_match(token) {
+                match *token {
+                    "(" => {
+                        construct_status.enter_branch();
+                    }
+                    ")" => {
+                        construct_status.quit_branch();
+                    }
+                    _ => {
+                        panic!("Unknown operator catched {}", token)
                     }
                 }
             }
         }
-
-        graph.retain_edges(|graph, edge| {
-            let bond_type = graph.edge_weight(edge).unwrap();
-            !bond_type.is_no_bond()
-        });
 
         if construct_status.branch.len() != 0 {
             Err(format!(
@@ -105,7 +108,7 @@ impl Molecule {
                 construct_status
                     .branch
                     .iter()
-                    .map(|index| graph.node_weight(*index).unwrap())
+                    .map(|index| self.graph.node_weight(*index).unwrap())
                     .collect::<Vec<&SmilesNode>>()
             ))
         } else if ring_status.waiting_to_connect.len() != 0 {
@@ -114,17 +117,35 @@ impl Molecule {
                 ring_status.waiting_to_connect
             ))
         } else {
-            Ok(Molecule(graph))
+            result
         }
+    }
+
+    pub fn find_strcutres_roots(&self) -> Vec<NodeIndex> {
+        self.graph.node_indices()
+            .filter(|index| {
+                // Keep incoming edges not a ring bond (dual direction in fact)
+                let node_incoming_amount = self.graph.edges_directed(*index, Incoming)
+                    .filter(|edge| {
+                        let bond = edge.weight();
+                        !bond.is_ring_bond()
+                    })
+                    .collect::<Vec<_>>()
+                    .len();
+                if node_incoming_amount == 0 {
+                    true
+                } else {false}
+            })
+            .collect()
     }
 
     pub fn filter_nodes<F>(&self, find_fn: F) -> Vec<NodeIndex>
     where
         F: Fn(&SmilesNode) -> bool,
     {
-        self.0
+        self.graph
             .node_indices()
-            .filter(|index| find_fn(&self.0[*index]))
+            .filter(|index| find_fn(&self.graph[*index]))
             .collect()
     }
 
@@ -132,25 +153,25 @@ impl Molecule {
     where
         F: Fn(&SmilesNode) -> bool,
     {
-        self.0
+        self.graph
             .node_indices()
-            .filter(|index| find_fn(&self.0[*index]))
+            .filter(|index| find_fn(&self.graph[*index]))
             .collect::<Vec<NodeIndex>>()
             .get(0)
             .and_then(|index| Some(*index))
     }
 
     pub fn get_atom(&self, index: NodeIndex) -> Option<&SmilesNode> {
-        self.0.node_weight(index)
+        self.graph.node_weight(index)
     }
 
     pub fn get_atom_mut(&mut self, index: NodeIndex) -> Option<&mut SmilesNode> {
-        self.0.node_weight_mut(index)
+        self.graph.node_weight_mut(index)
     }
 
     pub fn connect_new_atom(&mut self, atom: SmilesNode, connect_to: NodeIndex, bond_type: Bond) {
-        let new_node = self.0.add_node(atom);
-        self.0.add_edge(connect_to, new_node, bond_type);
+        let new_node = self.graph.add_node(atom);
+        self.graph.add_edge(connect_to, new_node, bond_type);
     }
 
     pub fn add_hydrogens(&mut self) {
@@ -165,7 +186,7 @@ impl Molecule {
                 let aromatic = if node.aromatic { 1 } else { 0 };
                 let charge = node.charge;
                 let neighbors = self
-                    .0
+                    .graph
                     .neighbors_undirected(*index)
                     .collect::<Vec<_>>()
                     .len() as isize;
@@ -192,18 +213,15 @@ impl Molecule {
     }
 
     pub fn remove_hydrogens(&mut self) {
-        let hydrogens = self.filter_nodes(|node| node.element == Element::H);
-        println!("{:?}", hydrogens);
-        for atom in hydrogens {
-            match self.0.remove_node(atom) {
-                Some(node) => {println!("{} removed", node)}
-                None => {println!("Failed to remove {:?}", atom)}
-            }
-        }
+        self.filter_nodes(|node| node.element == Element::H)
+            .iter()
+            .for_each(|index| {
+                self.graph.remove_node(*index);
+            })
     }
 
     pub fn dot_representation(&self) -> Dot<&StableGraph<SmilesNode, Bond, Directed>> {
-        Dot::new(&self.0)
+        Dot::new(&self.graph)
     }
 }
 
@@ -220,8 +238,9 @@ impl Status {
         }
     }
 
-    fn next(&mut self, index: NodeIndex) {
+    fn next(&mut self, index: NodeIndex) -> NodeIndex {
         self.current = Some(index);
+        index
     }
 
     fn enter_branch(&mut self) {
@@ -266,6 +285,7 @@ impl RingStatus {
             let id = captured
                 .name("ring_id")
                 .and_then(|m| Some(m.as_str()))
+                .and_then(|s| Some(s.strip_prefix("%").unwrap_or(s)))
                 .and_then(|s| {
                     Some(
                         s.parse::<u8>()

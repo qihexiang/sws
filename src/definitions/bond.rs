@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use petgraph::graph::NodeIndex;
-
 use crate::tokenizer::BOND_RE;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -55,6 +53,10 @@ impl Bond {
             false
         }
     }
+
+    pub fn is_ring_bond(&self) -> bool {
+        self.ring
+    } 
 }
 
 impl Display for Bond {
