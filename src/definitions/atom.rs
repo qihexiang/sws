@@ -5,7 +5,7 @@ use crate::tokenizer::{AROMATIC_ORGANIC_RE, NAGETIVE_RE, ORGANIC_SUBSET_RE, STAN
 use petgraph::graph::NodeIndex;
 
 #[derive(Debug)]
-pub struct SmilesNode {
+pub struct Atom {
     pub element: Element,
     pub isotope: Option<u16>,
     pub charge: isize,
@@ -16,11 +16,11 @@ pub struct SmilesNode {
     pub react_id: Option<usize>,
 }
 
-impl SmilesNode {
+impl Atom {
     pub fn new(token: &str, current_node_index: Option<NodeIndex>) -> Option<Self> {
         if let Some(captured) = ORGANIC_SUBSET_RE.captures(token) {
             let (element, aromatic, chirality_type) = Self::minimal_node_info(&captured)?;
-            Some(SmilesNode {
+            Some(Atom {
                 element,
                 isotope: None,
                 charge: 0,
@@ -82,7 +82,7 @@ impl SmilesNode {
                     )
                 })
                 .map(String::from);
-            Some(SmilesNode {
+            Some(Atom {
                 element,
                 isotope,
                 charge,
@@ -113,7 +113,7 @@ impl SmilesNode {
     }
 }
 
-impl Display for SmilesNode {
+impl Display for Atom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.element.as_ref())
     }

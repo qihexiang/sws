@@ -1,15 +1,15 @@
-use crate::definitions::element::Element;
-
 mod element;
 mod bond;
 mod chirality;
-mod smiles_node;
+mod atom;
 pub mod selectors;
-pub mod molecule;
+pub mod workspace;
+pub mod smiles;
 
 #[test]
 fn generate_node() {
-    use molecule::Molecules;
+    use workspace::Workspace;
+    use element::Element;
     let smiles_strs = vec![
         // "c1cc[13c]cc1",
         // "c1ccccc1C@@(N)(P)S",
@@ -26,15 +26,15 @@ fn generate_node() {
         // "[CH2:1]=[CH:2][CH2:1][CH2:3][C:4](C)[CH2:3]"
     ];
 
-    let mut mole = Molecules::new();
+    let mut mole = Workspace::new();
     for smiles in smiles_strs.iter() {
         mole.add_smiles(smiles).unwrap();
         println!("{}", smiles);
     }
 
     println!("{}", mole.dot_representation());
-    let p_atoms = mole.filter_nodes(|atom| atom.element == Element::P);
+    let p_atoms = mole.filter_nodes(&|atom| atom.element == Element::P);
     mole.reset_root(p_atoms[0]);
-    mole.find_root_of(p_atoms[1]);
+    assert_eq!(p_atoms.get(0).copied(), mole.find_root_of(p_atoms[1]));
     println!("{}", mole.dot_representation());
 }
