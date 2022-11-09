@@ -57,6 +57,14 @@ impl Bond {
     pub fn is_ring_bond(&self) -> bool {
         self.ring
     } 
+
+    pub fn reverse(self) -> Self {
+        match self.bond_type {
+            BondType::UpSingle => Bond::new(BondType::DownSingle, self.ring),
+            BondType::DownSingle => Bond::new(BondType::UpSingle, self.ring),
+            _ => self
+        }
+    } 
 }
 
 impl Display for Bond {
