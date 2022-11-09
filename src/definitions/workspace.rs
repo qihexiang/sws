@@ -3,9 +3,9 @@ use petgraph::{
 };
 
 use super::{
+    atom::Atom,
     bond::{Bond, BondType},
     element::Element,
-    atom::Atom,
 };
 
 /// a Workspace is a graph space that can deal with structures
@@ -112,6 +112,57 @@ impl Workspace {
         }
     }
 
+    fn get_outgoings(&self, node: NodeIndex) -> Vec<NodeIndex> {
+        let neighbors = self
+            .graph
+            .neighbors(node)
+            .filter(|neighbor| {
+                let edge_index = self.graph.find_edge(node, *neighbor);
+                if let Some(edge_index) = edge_index {
+                    let edge = self.graph.edge_weight(edge_index);
+                    if let Some(bond) = edge {
+                        !bond.is_ring_bond()
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<_>>();
+        let recursive_neighbors = neighbors
+            .iter()
+            .map(|neighbor| self.get_outgoings(*neighbor))
+            .collect::<Vec<_>>()
+            .concat();
+
+        [neighbors, recursive_neighbors].concat()
+    }
+
+    pub fn get_atoms_of_structure(&self, node: NodeIndex) -> Option<Vec<NodeIndex>> {
+        let root = self.find_root_of(node)?;
+        Some(self.get_outgoings(root))
+    }
+
+    pub fn add_hydrogen_to_structure(&mut self, node: NodeIndex) -> Option<()> {
+        let atoms = self.get_atoms_of_structure(node)?;
+        for atom in atoms {
+            self.add_hydrogen_to_atom(atom);
+        }
+        Some(())
+    }
+
+    pub fn remove_hydrogens_from_structure(&mut self, node: NodeIndex) -> Option<()> {
+        let atoms = self.get_atoms_of_structure(node)?;
+        for atom in atoms {
+            let element = &self.graph.node_weight(atom)?.element;
+            if let Element::H = element {
+                self.graph.remove_node(atom);
+            }
+        }
+        Some(())
+    }
+
     /// Find nodes by given conditions.
     pub fn filter_nodes(&self, find_fn: &dyn Fn(&Atom) -> bool) -> Vec<NodeIndex> {
         self.graph
@@ -133,59 +184,51 @@ impl Workspace {
         self.graph.node_weight_mut(index)
     }
 
-    pub fn connect_new_atom(&mut self, atom: Atom, connect_to: NodeIndex, bond_type: Bond) {
+    pub fn connect_new_atom(
+        &mut self,
+        atom: Atom,
+        connect_to: NodeIndex,
+        bond_type: Bond,
+    ) -> NodeIndex {
         let new_node = self.graph.add_node(atom);
         self.graph.add_edge(connect_to, new_node, bond_type);
+        new_node
     }
 
-    pub fn add_hydrogens(&mut self) {
-        self.filter_nodes(&|_| true).iter().for_each(|index| {
-            let node = self.get_atom(*index).unwrap();
-            let hydrogens_to_add = if node.explicit_hydrogen != 0 {
-                node.explicit_hydrogen
-            } else if node.element.default_hydrogen() == 0 {
-                0
+    fn add_hydrogen_to_atom(&mut self, atom: NodeIndex) -> Option<Vec<NodeIndex>> {
+        let node = self.get_atom(atom)?;
+        let hydrogens_to_add = if node.explicit_hydrogen != 0 {
+            node.explicit_hydrogen
+        } else if node.element.default_hydrogen() == 0 {
+            0
+        } else {
+            let default_hydrogens = node.element.default_hydrogen();
+            let aromatic = if node.aromatic { 1 } else { 0 };
+            let charge = node.charge;
+            let neighbors = self
+                .graph
+                .neighbors_undirected(atom)
+                .collect::<Vec<_>>()
+                .len() as isize;
+            let need_to_add = (default_hydrogens as isize) + charge - neighbors - aromatic;
+            if need_to_add >= 0 {
+                need_to_add as usize
             } else {
-                let default_hydrogens = node.element.default_hydrogen();
-                let aromatic = if node.aromatic { 1 } else { 0 };
-                let charge = node.charge;
-                let neighbors = self
-                    .graph
-                    .neighbors_undirected(*index)
-                    .collect::<Vec<_>>()
-                    .len() as isize;
-                let need_to_add = (default_hydrogens as isize) + charge - neighbors - aromatic;
-                if need_to_add >= 0 {
-                    need_to_add as usize
-                } else {
-                    0
-                }
-            };
-            let mut counter = 0usize;
-            loop {
-                if counter == hydrogens_to_add {
-                    break;
-                }
-                counter += 1;
-                self.connect_new_atom(
-                    Atom::new("[H]", None).unwrap(),
-                    *index,
-                    Bond::new(BondType::Single, false),
-                )
+                0
             }
-        });
-    }
-
-    pub fn remove_hydrogens(&mut self) {
-        self.filter_nodes(&|node| node.element == Element::H)
-            .iter()
-            .for_each(|index| {
-                self.graph.remove_node(*index);
-            })
+        };
+        let mut added_hydrogens = vec![];
+        while added_hydrogens.len() != hydrogens_to_add {
+            added_hydrogens.push(self.connect_new_atom(
+                Atom::new("[H]", None).unwrap(),
+                atom,
+                Bond::new(BondType::Single, false),
+            ))
+        }
+        Some(added_hydrogens)
     }
 
     pub fn dot_representation(&self) -> Dot<&StableGraph<Atom, Bond, Directed>> {
         Dot::new(&self.graph)
     }
 }
-

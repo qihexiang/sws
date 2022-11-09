@@ -36,5 +36,6 @@ fn generate_node() {
     let p_atoms = mole.filter_nodes(&|atom| atom.element == Element::P);
     mole.reset_root(p_atoms[0]);
     assert_eq!(p_atoms.get(0).copied(), mole.find_root_of(p_atoms[1]));
+    mole.add_hydrogen_to_structure(p_atoms[1]);
     println!("{}", mole.dot_representation());
 }
