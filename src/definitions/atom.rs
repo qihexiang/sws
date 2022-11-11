@@ -1,15 +1,14 @@
-use std::{str::FromStr, fmt::Display};
+use std::{fmt::Display, str::FromStr};
 
 use super::{chirality::ChiralityType, element::Element};
 use crate::tokenizer::{AROMATIC_ORGANIC_RE, NAGETIVE_RE, ORGANIC_SUBSET_RE, STANDARD_NODE_RE};
-use petgraph::graph::NodeIndex;
 
 #[derive(Debug)]
 pub struct Atom {
     pub element: Element,
     pub isotope: Option<u16>,
     pub charge: isize,
-    pub chirality: (Option<ChiralityType>, Option<NodeIndex>),
+    pub chirality_type: Option<ChiralityType>,
     pub explicit_hydrogen: usize,
     pub selector: Option<String>,
     pub aromatic: bool,
@@ -17,14 +16,78 @@ pub struct Atom {
 }
 
 impl Atom {
-    pub fn new(token: &str, current_node_index: Option<NodeIndex>) -> Option<Self> {
+    pub fn to_token(&self) -> String {
+        let mut token = String::new();
+        if self.element.is_organic_subset()
+            && self.isotope == None
+            && self.charge == 0
+            && self.explicit_hydrogen == 0
+            && self.selector == None
+            && self.react_id == None
+        {
+            token.push_str(&self.core_token());
+        } else {
+            token.push_str("[");
+            if let Some(isotope) = self.isotope {
+                token.push_str(&isotope.to_string());
+            }
+            token.push_str(&self.core_token());
+            if self.explicit_hydrogen != 0 {
+                token.push_str("H");
+                if self.explicit_hydrogen > 1 {
+                    token.push_str(&self.explicit_hydrogen.to_string());
+                }
+            }
+            token.push_str(&self.charge_token());
+            if let Some(react_id) = self.react_id {
+                token.push_str(":");
+                token.push_str(&react_id.to_string());
+            }
+            if let Some(selector) = &self.selector {
+                token.push_str("{");
+                token.push_str(selector);
+                token.push_str("}");
+            }
+            token.push_str("]");
+        }
+        token
+    }
+
+    fn core_token(&self) -> String {
+        let mut core_token = String::new();
+        let element_token = self.element.as_ref();
+        if self.aromatic && ORGANIC_SUBSET_RE.is_match(element_token) {
+            core_token.push_str(&element_token.to_lowercase());
+        } else {
+            core_token.push_str(element_token);
+        }
+        if let Some(chirality) = &self.chirality_type {
+            core_token.push_str(chirality.as_str());
+        }
+        core_token
+    }
+
+    fn charge_token(&self) -> String {
+        let mut charge_token = String::new();
+        if self.charge < 0 {
+            charge_token.push_str("-");
+        } else if self.charge > 0 {
+            charge_token.push_str("+");
+        }
+        if self.charge.abs() > 1 {
+            charge_token.push_str(&self.charge.abs().to_string())
+        }
+        charge_token
+    }
+
+    pub fn new(token: &str) -> Option<Self> {
         if let Some(captured) = ORGANIC_SUBSET_RE.captures(token) {
             let (element, aromatic, chirality_type) = Self::minimal_node_info(&captured)?;
             Some(Atom {
                 element,
                 isotope: None,
                 charge: 0,
-                chirality: (chirality_type, current_node_index),
+                chirality_type,
                 explicit_hydrogen: 0,
                 selector: None,
                 aromatic,
@@ -41,9 +104,9 @@ impl Atom {
                     });
             let explicit_hydrogen = captured
                 .name("explicit_hydrogen")
-                .and_then(|m| match m.as_str().parse() {
-                    Ok(isotope) => Some(isotope),
-                    Err(_) => None,
+                .and_then(|_| match captured.name("explicit_hydrogen_num") {
+                    Some(num) => Some(num.as_str().parse::<usize>().unwrap_or(1)),
+                    None => Some(1),
                 })
                 .map_or(0, |v| v);
             let charge = {
@@ -86,7 +149,7 @@ impl Atom {
                 element,
                 isotope,
                 charge,
-                chirality: (chirality_type, current_node_index),
+                chirality_type,
                 explicit_hydrogen,
                 selector,
                 aromatic,

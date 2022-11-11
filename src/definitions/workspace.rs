@@ -1,5 +1,9 @@
 use petgraph::{
-    dot::Dot, graph::NodeIndex, stable_graph::StableGraph, Directed, Direction::Incoming,
+    dot::Dot,
+    graph::{Node, NodeIndex},
+    stable_graph::{EdgeIndex, StableGraph},
+    Directed,
+    Direction::{self, Incoming},
 };
 
 use super::{
@@ -53,11 +57,10 @@ impl Workspace {
     fn reverse_bond(&mut self, from: NodeIndex, to: NodeIndex) -> Option<bool> {
         let current_edge = self.graph.find_edge(from, to)?;
         let bond = self.graph.remove_edge(current_edge)?;
+        self.graph.add_edge(to, from, bond.reverse());
         if bond.is_ring_bond() {
-            self.graph.add_edge(from, to, bond);
             Some(false)
         } else {
-            self.graph.add_edge(to, from, bond.reverse());
             Some(true)
         }
     }
@@ -112,10 +115,15 @@ impl Workspace {
         }
     }
 
-    fn get_outgoings(&self, node: NodeIndex) -> Vec<NodeIndex> {
+    pub fn get_next_neighbors(&self, node: NodeIndex) -> Vec<NodeIndex> {
+        self.graph.neighbors(node).collect()
+    }
+
+    pub fn get_outgoings(&self, node: NodeIndex) -> Vec<NodeIndex> {
         let neighbors = self
-            .graph
-            .neighbors(node)
+            .get_next_neighbors(node)
+            .iter()
+            .copied()
             .filter(|neighbor| {
                 let edge_index = self.graph.find_edge(node, *neighbor);
                 if let Some(edge_index) = edge_index {
@@ -152,17 +160,6 @@ impl Workspace {
         Some(())
     }
 
-    pub fn remove_hydrogens_from_structure(&mut self, node: NodeIndex) -> Option<()> {
-        let atoms = self.get_atoms_of_structure(node)?;
-        for atom in atoms {
-            let element = &self.graph.node_weight(atom)?.element;
-            if let Element::H = element {
-                self.graph.remove_node(atom);
-            }
-        }
-        Some(())
-    }
-
     /// Find nodes by given conditions.
     pub fn filter_nodes(&self, find_fn: &dyn Fn(&Atom) -> bool) -> Vec<NodeIndex> {
         self.graph
@@ -184,6 +181,40 @@ impl Workspace {
         self.graph.node_weight_mut(index)
     }
 
+    pub fn get_edge_undirected(
+        &self,
+        atom_a: NodeIndex,
+        atom_to: NodeIndex,
+    ) -> Option<(&Bond, EdgeIndex, Direction)> {
+        self.graph
+            .find_edge_undirected(atom_a, atom_to)
+            .and_then(|(edge, direction)| {
+                self.graph
+                    .edge_weight(edge)
+                    .and_then(|bond| Some((bond, edge, direction)))
+            })
+    }
+
+    pub fn get_edge(&self, atom_from: NodeIndex, atom_to: NodeIndex) -> Option<(&Bond, EdgeIndex)> {
+        self.graph.find_edge(atom_from, atom_to).and_then(|edge| {
+            self.graph
+                .edge_weight(edge)
+                .and_then(|bond| Some((bond, edge)))
+        })
+    }
+
+    pub fn get_edge_mut(
+        &mut self,
+        atom_from: NodeIndex,
+        atom_to: NodeIndex,
+    ) -> Option<(&mut Bond, EdgeIndex)> {
+        self.graph.find_edge(atom_from, atom_to).and_then(|edge| {
+            self.graph
+                .edge_weight_mut(edge)
+                .and_then(|bond| Some((bond, edge)))
+        })
+    }
+
     pub fn connect_new_atom(
         &mut self,
         atom: Atom,
@@ -196,9 +227,11 @@ impl Workspace {
     }
 
     fn add_hydrogen_to_atom(&mut self, atom: NodeIndex) -> Option<Vec<NodeIndex>> {
-        let node = self.get_atom(atom)?;
-        let hydrogens_to_add = if node.explicit_hydrogen != 0 {
-            node.explicit_hydrogen
+        let node = self.get_atom_mut(atom)?;
+        let explicit_hydrogen = node.explicit_hydrogen;
+        node.explicit_hydrogen = 0;
+        let hydrogens_to_add = if explicit_hydrogen != 0 {
+            explicit_hydrogen
         } else if node.element.default_hydrogen() == 0 {
             0
         } else {
@@ -220,7 +253,7 @@ impl Workspace {
         let mut added_hydrogens = vec![];
         while added_hydrogens.len() != hydrogens_to_add {
             added_hydrogens.push(self.connect_new_atom(
-                Atom::new("[H]", None).unwrap(),
+                Atom::new("[H]").unwrap(),
                 atom,
                 Bond::new(BondType::Single, false),
             ))

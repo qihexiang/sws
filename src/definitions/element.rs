@@ -1,4 +1,4 @@
-use strum_macros::{EnumString, AsRefStr};
+use strum_macros::{AsRefStr, EnumString};
 
 #[derive(EnumString, AsRefStr, Debug, PartialEq)]
 pub enum Element {
@@ -97,7 +97,23 @@ impl Element {
             Self::O | Self::S => 2,
             Self::B | Self::N | Self::P => 3,
             Self::C | Self::Si => 4,
-            _ => 0
+            _ => 0,
+        }
+    }
+
+    pub fn is_organic_subset(&self) -> bool {
+        match self {
+            Self::B
+            | Self::C
+            | Self::N
+            | Self::O
+            | Self::F
+            | Self::P
+            | Self::S
+            | Self::Cl
+            | Self::Br 
+            | Self::I => true,
+            _ => false,
         }
     }
 }
