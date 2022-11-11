@@ -1,5 +1,5 @@
 mod element;
-mod bond;
+pub mod bond;
 mod chirality;
 mod atom;
 pub mod selectors;
@@ -10,7 +10,6 @@ pub mod encode;
 #[test]
 fn generate_node() {
     use workspace::Workspace;
-    use element::Element;
     let smiles_strs = vec![
         "c1cc[13c]cc1",
         "c1ccccc1C@@(N)(P)S",

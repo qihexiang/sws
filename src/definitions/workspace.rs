@@ -1,6 +1,6 @@
 use petgraph::{
     dot::Dot,
-    graph::{Node, NodeIndex},
+    graph::NodeIndex,
     stable_graph::{EdgeIndex, StableGraph},
     Directed,
     Direction::{self, Incoming},
@@ -9,7 +9,6 @@ use petgraph::{
 use super::{
     atom::Atom,
     bond::{Bond, BondType},
-    element::Element,
 };
 
 /// a Workspace is a graph space that can deal with structures
@@ -143,13 +142,12 @@ impl Workspace {
             .map(|neighbor| self.get_outgoings(*neighbor))
             .collect::<Vec<_>>()
             .concat();
-
         [neighbors, recursive_neighbors].concat()
     }
 
     pub fn get_atoms_of_structure(&self, node: NodeIndex) -> Option<Vec<NodeIndex>> {
         let root = self.find_root_of(node)?;
-        Some(self.get_outgoings(root))
+        Some([vec![root], self.get_outgoings(root)].concat())
     }
 
     pub fn add_hydrogen_to_structure(&mut self, node: NodeIndex) -> Option<()> {
@@ -158,6 +156,31 @@ impl Workspace {
             self.add_hydrogen_to_atom(atom);
         }
         Some(())
+    }
+
+    /// Find nodes by given conditions.
+    pub fn filter_nodes_in_structure(
+        &self,
+        structre_root: NodeIndex,
+        find_fn: &dyn Fn(&Atom) -> bool,
+    ) -> Option<Vec<NodeIndex>> {
+        Some(
+            self.get_atoms_of_structure(structre_root)?
+                .into_iter()
+                .filter(|index| find_fn(&self.graph[*index]))
+                .collect(),
+        )
+    }
+
+    /// Find first node match given condition
+    pub fn find_node_in_structure(
+        &self,
+        structure_root: NodeIndex,
+        find_fn: &dyn Fn(&Atom) -> bool,
+    ) -> Option<NodeIndex> {
+        self.filter_nodes_in_structure(structure_root, find_fn)?
+            .get(0)
+            .copied()
     }
 
     /// Find nodes by given conditions.
@@ -215,7 +238,16 @@ impl Workspace {
         })
     }
 
-    pub fn connect_new_atom(
+    pub fn connect(
+        &mut self,
+        outgoing_from: NodeIndex,
+        incoming_to: NodeIndex,
+        bond_type: Bond,
+    ) -> EdgeIndex {
+        self.graph.add_edge(outgoing_from, incoming_to, bond_type)
+    }
+
+    fn connect_new_atom(
         &mut self,
         atom: Atom,
         connect_to: NodeIndex,
