@@ -2,6 +2,13 @@ use petgraph::{graph::NodeIndex, stable_graph::EdgeIndex};
 
 use super::Workspace;
 
+use lazy_static::lazy_static;
+use regex::Regex;
+
+lazy_static! {
+    static ref SELECTOR_RE: Regex = Regex::new(r"\{.*?\}").unwrap();
+}
+
 struct SmilesGenerator<'a> {
     workspace: &'a Workspace,
     previous_node: Option<NodeIndex>,
@@ -161,7 +168,7 @@ impl<'a> SmilesGenerator<'a> {
 }
 
 impl Workspace {
-    pub fn to_smiles(&self, node: NodeIndex) -> Option<String> {
+    pub fn to_sws(&self, node: NodeIndex) -> Option<String> {
         let generator = SmilesGenerator::new(self, node)?;
         let mut smiles = String::new();
         for fragment in generator {
@@ -169,4 +176,15 @@ impl Workspace {
         }
         Some(smiles)
     }
+
+    pub fn to_smiles(&self, node: NodeIndex) -> Option<String> {
+        let sws = self.to_sws(node)?;
+        Some(SELECTOR_RE.replace_all(&sws, "").to_string())
+    }
+}
+
+#[test]
+fn remove_selectors() {
+    let sws = "[P{R;R;}]C[C{R;R}]C[P{R;R;}]";
+    println!("{}", SELECTOR_RE.replace_all(sws, "").to_string())
 }

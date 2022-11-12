@@ -1,12 +1,10 @@
 pub mod definitions;
-pub mod workspace;
 mod tokenizer;
-use definitions::{
-    bond::{BondType},
-};
-use workspace::Workspace;
+pub mod workspace;
+use definitions::bond::BondType;
 use petgraph::graph::NodeIndex;
 use rand::prelude::*;
+use workspace::Workspace;
 
 /// 连接规则：Out-In，R-RIn
 pub fn random_generate_structures(
@@ -15,7 +13,7 @@ pub fn random_generate_structures(
     duals: Vec<&str>,
     singles: Vec<&str>,
     duals_amount: usize,
-) {
+) -> Option<String> {
     let mut ws = Workspace::new();
     let start_point = ws.add_smiles(start).unwrap();
     let find_with_selector = |ws: &Workspace, root: NodeIndex, target_selector: &str| {
@@ -83,7 +81,7 @@ pub fn random_generate_structures(
         remove_selector(&mut ws, r_outgoing, "R");
         remove_selector(&mut ws, r_incoming, "RIn");
     }
-    println!("{}", ws.to_smiles(start_point).unwrap());
+    ws.to_smiles(start_point)
 }
 
 fn random_take_one<'a, E>(collection: &'a Vec<E>) -> &'a E {
@@ -96,7 +94,7 @@ fn random_take_one<'a, E>(collection: &'a Vec<E>) -> &'a E {
 #[test]
 fn generate_structures() {
     for _ in 0..100 {
-        random_generate_structures(
+        let result = random_generate_structures(
             "[P{R;R;Out}]",
             "[P{R;R;In}]",
             vec![
@@ -113,6 +111,8 @@ fn generate_structures() {
                 "[c{RIn}]1ccccc1",
             ],
             2,
-        );
+        )
+        .unwrap();
+        println!("{}", result);
     }
 }
