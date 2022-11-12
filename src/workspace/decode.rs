@@ -1,11 +1,12 @@
 use crate::tokenizer::{smiles_tokenize, BRANCH_RE, NOTHING_RE, RING_BOND_RE};
 use petgraph::graph::NodeIndex;
 
-use super::{
+use crate::definitions::{
     atom::Atom,
     bond::{Bond, BondType},
-    workspace::Workspace,
 };
+
+use super::Workspace;
 
 struct Status {
     branch: Vec<NodeIndex>,

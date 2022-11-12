@@ -1,6 +1,6 @@
 use petgraph::{graph::NodeIndex, stable_graph::EdgeIndex};
 
-use super::workspace::Workspace;
+use super::Workspace;
 
 struct SmilesGenerator<'a> {
     workspace: &'a Workspace,

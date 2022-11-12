@@ -1,9 +1,10 @@
 pub mod definitions;
+pub mod workspace;
 mod tokenizer;
 use definitions::{
-    bond::{Bond, BondType},
-    workspace::Workspace,
+    bond::{BondType},
 };
+use workspace::Workspace;
 use petgraph::graph::NodeIndex;
 use rand::prelude::*;
 
@@ -18,7 +19,7 @@ pub fn random_generate_structures(
     let mut ws = Workspace::new();
     let start_point = ws.add_smiles(start).unwrap();
     let find_with_selector = |ws: &Workspace, root: NodeIndex, target_selector: &str| {
-        ws.find_node_in_structure(root, &|atom| {
+        ws.find_node_in_structure(root, |atom| {
             if let Some(selector) = &atom.selector {
                 let selectors = selector.split(";").collect::<Vec<&str>>();
                 selectors.contains(&target_selector)
@@ -61,7 +62,7 @@ pub fn random_generate_structures(
         let incoming = find_with_selector(&ws, dual_root, "In")
             .expect("Give fragment doesn't have In selector");
         ws.reset_root(incoming);
-        ws.connect(outgoing, incoming, Bond::new(BondType::Single, false));
+        ws.connect(outgoing, incoming, BondType::Single);
         remove_selector(&mut ws, outgoing, "Out");
         remove_selector(&mut ws, incoming, "In");
     }
@@ -71,14 +72,14 @@ pub fn random_generate_structures(
     let end_incoming =
         find_with_selector(&ws, end_root, "In").expect("Give fragment doesn't have Out selector");
     ws.reset_root(end_incoming);
-    ws.connect(outgoing, end_incoming, Bond::new(BondType::Single, false));
+    ws.connect(outgoing, end_incoming, BondType::Single);
     remove_selector(&mut ws, outgoing, "Out");
     remove_selector(&mut ws, end_incoming, "In");
     while let Some(r_outgoing) = find_with_selector(&ws, start_point, "R") {
         let r_root = ws.add_smiles(*random_take_one(&singles)).unwrap();
         let r_incoming = find_with_selector(&ws, r_root, "RIn")
             .expect("Single replacer must have at least one RIn selector");
-        ws.connect(r_outgoing, r_incoming, Bond::new(BondType::Single, false));
+        ws.connect(r_outgoing, r_incoming, BondType::Single);
         remove_selector(&mut ws, r_outgoing, "R");
         remove_selector(&mut ws, r_incoming, "RIn");
     }
