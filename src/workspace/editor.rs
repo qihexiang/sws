@@ -30,15 +30,14 @@ impl Workspace {
         outgoing_from: NodeIndex,
         incoming_to: NodeIndex,
         bond_type: BondType,
-    ) -> EdgeIndex {
-        self.graph.add_edge(
+    ) -> Option<EdgeIndex> {
+        let in_same_structure = self.in_same_structure(&[outgoing_from, incoming_to]);
+        self.reset_root(incoming_to)?;
+        Some(self.graph.add_edge(
             outgoing_from,
             incoming_to,
-            Bond::new(
-                bond_type,
-                self.in_same_structure(&[outgoing_from, incoming_to]),
-            ),
-        )
+            Bond::new(bond_type, in_same_structure),
+        ))
     }
 }
 
@@ -59,7 +58,6 @@ impl Workspace {
         }
     }
 
-    
     /// Reverse the direction from the given node recurvisely.
     /// Recurse will stop if there is no incoming edge or found a ring-key.
     fn reverse_recursive(&mut self, current: NodeIndex, last: Option<NodeIndex>) -> Option<()> {
