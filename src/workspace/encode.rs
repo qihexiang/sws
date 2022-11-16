@@ -179,12 +179,10 @@ impl Workspace {
 
     pub fn to_smiles(&self, node: NodeIndex) -> Option<String> {
         let sws = self.to_sws(node)?;
-        Some(SELECTOR_RE.replace_all(&sws, "").to_string())
+        Some(Self::sws_to_smiles(&sws))
     }
-}
 
-#[test]
-fn remove_selectors() {
-    let sws = "[P{R;R;}]C[C{R;R}]C[P{R;R;}]";
-    println!("{}", SELECTOR_RE.replace_all(sws, "").to_string())
+    pub fn sws_to_smiles(sws: &str) -> String {
+        SELECTOR_RE.replace_all(&sws, "").to_string()
+    }
 }

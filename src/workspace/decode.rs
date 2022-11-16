@@ -1,4 +1,4 @@
-use crate::tokenizer::{smiles_tokenize, BRANCH_RE, NOTHING_RE, RING_BOND_RE};
+use crate::tokenizer::{sws_tokenize, BRANCH_RE, NOTHING_RE, RING_BOND_RE};
 use petgraph::graph::NodeIndex;
 
 use crate::definitions::{
@@ -130,11 +130,11 @@ impl RingStatus {
 
 impl Workspace {
     /// add a SMILES into workspace as a structure.
-    pub fn add_smiles(&mut self, smiles: &str) -> Result<NodeIndex, String> {
+    pub fn add_structure(&mut self, smiles: &str) -> Result<NodeIndex, String> {
         let mut construct_status = Status::new();
         let mut ring_status = RingStatus::new();
         let mut bond_to_connect: Option<BondType> = None;
-        let tokens = smiles_tokenize(smiles);
+        let tokens = sws_tokenize(smiles);
         let result = if let Some(node) = Atom::new(tokens[0]) {
             Ok(construct_status.next(self.graph.add_node(node)))
         } else {
