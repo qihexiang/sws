@@ -71,6 +71,21 @@ impl<'a> Iterator for SmilesGenerator<'a> {
                 .get_edge_undirected(current_node, ring_bond_neighbor)
                 .unwrap();
 
+            let bond_token = if (self
+                .workspace
+                .get_atom(ring_bond_neighbor)
+                .unwrap()
+                .aromatic
+                && atom.aromatic
+                && bond.is_aromatic())
+                || bond.is_normal_single()
+                || self.ring_bonds.contains(&edge)
+            {
+                ""
+            } else {
+                bond.as_str()
+            };
+
             let ring_id = if let Some(position) = self
                 .ring_bonds
                 .iter()
@@ -80,22 +95,6 @@ impl<'a> Iterator for SmilesGenerator<'a> {
             } else {
                 self.ring_bonds.push(edge);
                 self.ring_bonds.len()
-            };
-
-            let bond_token = if !(self
-                .workspace
-                .get_atom(ring_bond_neighbor)
-                .unwrap()
-                .aromatic
-                && atom.aromatic
-                && bond.is_aromatic())
-                && !(bond.is_normal_single())
-                && !bond.is_normal_single()
-                || self.ring_bonds.contains(&edge)
-            {
-                ""
-            } else {
-                bond.as_str()
             };
 
             let ring_id_token = if ring_id >= 10 {
