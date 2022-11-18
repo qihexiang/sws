@@ -3,7 +3,7 @@ use regex::Regex;
 
 lazy_static! {
     pub static ref SWS_RE: Regex = Regex::new(r"\[([1-9][0-9]*)?((br?|cl?|n|o|p|s|f|i)|([A-Z][a-z]?))(@{0,2})(H([1-9][0-9]*)?)?(((\+|\-)([1-9][0-9]*))|(\+*)|(\-*))(:([0-9]+))?(\{.+?\})?\]|(((br?|cl?|n|o|p|s|f|i)|(Br?|Cl?|N|O|P|S|F|I))(@{0,2}))|\(|\)|\.|((\-|=|#|$|:)?([1-9]|(%[1-9][0-9]+)))|\-|=|#|$|:|/|\\").unwrap();
-    pub static ref BOND_RE: Regex = Regex::new(r"^(\-|=|#|$|:|/|\\)$").unwrap();
+    pub static ref BOND_RE: Regex = Regex::new(r"^(\.|\-|=|#|$|:|/|\\)$").unwrap();
     pub static ref NOTHING_RE: Regex = Regex::new(r"^(\.)$").unwrap();
     pub static ref RING_BOND_RE: Regex = Regex::new(r"^((?P<bond_type>\-|=|#|$|:|\|//)?(?P<ring_id>([1-9])|(%[1-9][0-9]+)))$").unwrap();
     pub static ref ORGANIC_SUBSET_RE: Regex = Regex::new("^((?P<element>(br?|cl?|n|o|p|s|f|i)|(Br?|Cl?|N|O|P|S|F|I))(?P<chirality>@{0,2}))$").unwrap();

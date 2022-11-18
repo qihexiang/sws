@@ -25,6 +25,7 @@ impl BondType {
                 "#" => BondType::Triple,
                 "$" => BondType::Quad,
                 ":" => BondType::Aromatic,
+                "." => BondType::NoBond,
                 _ => panic!("This shall never happend"),
             })
         } else {
